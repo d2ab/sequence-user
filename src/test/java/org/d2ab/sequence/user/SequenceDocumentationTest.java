@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
-package org.d2ab.sequence.user;import org.d2ab.collection.Maps;
+package org.d2ab.sequence.user;
+
+import org.d2ab.collection.Maps;
 import org.d2ab.sequence.*;
 import org.d2ab.util.Entries;
 import org.d2ab.util.Pair;
@@ -35,10 +37,8 @@ import static org.junit.Assert.assertThat;
 public class SequenceDocumentationTest {
 	@Test
 	public void filterAndMap() {
-		List<String> evens = Sequence.of(1, 2, 3, 4, 5, 6, 7, 8, 9)
-		                             .filter(x -> (x % 2) == 0)
-		                             .map(Object::toString)
-		                             .toList();
+		List<String> evens =
+				Sequence.of(1, 2, 3, 4, 5, 6, 7, 8, 9).filter(x -> (x % 2) == 0).map(Object::toString).toList();
 
 		assertThat(evens, contains("2", "4", "6", "8"));
 	}
@@ -99,9 +99,9 @@ public class SequenceDocumentationTest {
 
 	@Test
 	public void fibonacci() {
-		Sequence<Integer> fibonacci = Sequence.recurse(Pair.of(0, 1), pair -> pair.shiftLeft(pair.apply(Integer::sum)))
+		Sequence<Integer> fibonacci = Sequence.recurse(Pair.of(0, 1), p -> p.shiftLeft(p.apply(Integer::sum)))
 		                                      .map(Pair::getLeft)
-		                                      .until(55);
+		                                      .endingAt(34);
 
 		assertThat(fibonacci, contains(0, 1, 1, 2, 3, 5, 8, 13, 21, 34));
 	}
@@ -159,9 +159,8 @@ public class SequenceDocumentationTest {
 	public void entrySequence() {
 		Map<String, Integer> original = Maps.builder("1", 1).put("2", 2).put("3", 3).put("4", 4).build();
 
-		EntrySequence<Integer, String> oddsInverted = EntrySequence.from(original)
-		                                                           .filter((k, v) -> v % 2 != 0)
-		                                                           .map((k, v) -> Entries.of(v, k));
+		EntrySequence<Integer, String> oddsInverted =
+				EntrySequence.from(original).filter((k, v) -> v % 2 != 0).map((k, v) -> Entries.of(v, k));
 
 		assertThat(oddsInverted.toMap(), is(equalTo(Maps.builder(1, "1").put(3, "3").build())));
 	}
@@ -189,10 +188,9 @@ public class SequenceDocumentationTest {
 
 	@Test
 	public void biSequence() {
-		BiSequence<String, Integer> presidents = BiSequence.ofPair("Abraham Lincoln", 1861)
-		                                                   .appendPair("Richard Nixon", 1969)
-		                                                   .appendPair("George Bush", 2001)
-		                                                   .appendPair("Barack Obama", 2005);
+		BiSequence<String, Integer> presidents =
+				BiSequence.ofPairs("Abraham Lincoln", 1861, "Richard Nixon", 1969, "George Bush", 2001, "Barack Obama",
+				                   2005);
 
 		Sequence<String> joinedOffice = presidents.toSequence((n, y) -> n + " (" + y + ")");
 
@@ -200,8 +198,15 @@ public class SequenceDocumentationTest {
 		                                  "Barack Obama (2005)"));
 	}
 
+	@SuppressWarnings("unchecked")
 	@Test
-	public void window() {
+	public void partitionConsonantsVowels() {
+		CharSeq word = CharSeq.from("terrain");
+		String vowels = "aeoiuy";
 
+		Sequence<String> consonantsVowels =
+				word.batch((a, b) -> (vowels.indexOf(a) == -1) != (vowels.indexOf(b) == -1)).map(CharSeq::asString);
+
+		assertThat(consonantsVowels, contains("t", "e", "rr", "ai", "n"));
 	}
 }
