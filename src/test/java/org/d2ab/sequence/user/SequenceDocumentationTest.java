@@ -21,15 +21,13 @@ import org.d2ab.sequence.*;
 import org.d2ab.util.Pair;
 import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.io.*;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.lang.Character.toUpperCase;
 import static java.lang.Math.sqrt;
-import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.assertThat;
@@ -38,36 +36,38 @@ public class SequenceDocumentationTest {
 	@Test
 	public void filterAndMap() {
 		List<String> evens =
-				Sequence.of(1, 2, 3, 4, 5, 6, 7, 8, 9).filter(x -> (x % 2) == 0).map(Object::toString).toList();
+				Sequence.of(1, 2, 3, 4, 5, 6, 7, 8, 9).filter(x -> x % 2 == 0).map(Object::toString).toList();
 
 		assertThat(evens, contains("2", "4", "6", "8"));
 	}
 
 	@Test
 	public void reuseOfSequence() {
-		Sequence<Integer> singulars = Sequence.ints().limit(10); // Digits 1..10
+		Sequence<Integer> singulars = Sequence.range(1, 9); // Digits 1..9
 
-		// using sequence of ints 1..10 first time to get odd numbers between 1 and 10
+		// using sequence of ints 1..9 first time to get odd numbers between 1 and 9
 		Sequence<Integer> odds = singulars.step(2);
 		assertThat(odds, contains(1, 3, 5, 7, 9));
 
-		// re-using the same sequence again to get squares of numbers between 4 and 9
-		Sequence<Integer> squares = singulars.map(i -> i * i).skip(3).limit(5);
+		// re-using the same sequence again to get squares of numbers between 4 and 8
+		Sequence<Integer> squares = singulars.startingFrom(4).endingAt(8).map(i -> i * i);
 		assertThat(squares, contains(16, 25, 36, 49, 64));
 	}
 
 	@Test
 	public void sequenceInForeach() {
-		Sequence<Integer> sequence = Sequence.ints().limit(3);
+		Sequence<Integer> sequence = Sequence.ints().limit(5);
 
 		int x = 1;
 		for (int i : sequence)
 			assertThat(i, is(x++));
+
+		assertThat(x, is(6));
 	}
 
 	@Test
 	public void functionalInterface() {
-		List<Integer> list = asList(1, 2, 3, 4, 5);
+		List<Integer> list = Arrays.asList(1, 2, 3, 4, 5);
 
 		// Sequence as @FunctionalInterface of list's Iterator
 		Sequence<Integer> sequence = list::iterator;
@@ -78,13 +78,52 @@ public class SequenceDocumentationTest {
 		assertThat(transformed.limit(3), contains("1", "2", "3"));
 	}
 
+	@Test
+	public void fromIterator() {
+		Iterator<Integer> iterator = Arrays.asList(1, 2, 3, 4, 5).iterator();
+
+		Sequence<Integer> sequence = Sequence.once(iterator);
+
+		assertThat(sequence, contains(1, 2, 3, 4, 5));
+		assertThat(sequence, is(emptyIterable()));
+	}
+
+	@Test
+	public void caching() {
+		Iterator<Integer> iterator = Arrays.asList(1, 2, 3, 4, 5).iterator();
+
+		Sequence<Integer> sequence = Sequence.cache(iterator);
+
+		assertThat(sequence, contains(1, 2, 3, 4, 5));
+		assertThat(sequence, contains(1, 2, 3, 4, 5));
+	}
+
+	@Test
+	public void removeAll() {
+		List<Integer> list = new ArrayList<>(Arrays.asList(1, 2, 3, 4, 5));
+
+		Sequence.from(list).filter(x -> x % 2 != 0).removeAll();
+
+		assertThat(list, contains(2, 4));
+	}
+
+	@Test
+	public void updatingCollection() {
+		List<Integer> list = new ArrayList<>(Arrays.asList(1, 2, 3, 4, 5));
+
+		Sequence<Integer> sequence = Sequence.from(list).filter(x -> x % 2 == 0);
+		assertThat(sequence, contains(2, 4));
+
+		list.add(6);
+		assertThat(sequence, contains(2, 4, 6));
+	}
+
 	@SuppressWarnings("SpellCheckingInspection")
 	@Test
 	public void streamToSequenceAndBack() {
-		Stream<String> abcd = asList("a", "b", "c", "d").stream();
-		Stream<String> abbccd = Sequence.from(abcd).pairs().<String>flatten().stream();
+		Sequence<String> paired = Sequence.once(Stream.of("a", "b", "c", "d")).pairs().flatten();
 
-		assertThat(abbccd.collect(Collectors.toList()), contains("a", "b", "b", "c", "c", "d"));
+		assertThat(paired.stream().collect(Collectors.toList()), contains("a", "b", "b", "c", "c", "d"));
 	}
 
 	@Test
@@ -111,21 +150,10 @@ public class SequenceDocumentationTest {
 	@Test
 	public void factorial() {
 		Sequence<Long> thirteen = Sequence.longs().limit(13);
-		Long factorial = thirteen.reduce(1L, (r, i) -> r * i);
+
+		long factorial = thirteen.reduce(1L, (r, i) -> r * i);
 
 		assertThat(factorial, is(6227020800L));
-	}
-
-	@Test
-	public void biSequence() {
-		BiSequence<String, Integer> presidents =
-				BiSequence.ofPairs("Abraham Lincoln", 1861, "Richard Nixon", 1969, "George Bush", 2001, "Barack Obama",
-				                   2005);
-
-		Sequence<String> joinedOffice = presidents.toSequence((n, y) -> n + " (" + y + ")");
-
-		assertThat(joinedOffice, contains("Abraham Lincoln (1861)", "Richard Nixon (1969)", "George Bush (2001)",
-		                                  "Barack Obama (2005)"));
 	}
 
 	@Test
@@ -159,6 +187,18 @@ public class SequenceDocumentationTest {
 				EntrySequence.from(original).filter((k, v) -> v % 2 != 0).map((k, v) -> Maps.entry(v, k));
 
 		assertThat(oddsInverted.toMap(), is(equalTo(Maps.builder(1, "1").put(3, "3").build())));
+	}
+
+	@Test
+	public void biSequence() {
+		BiSequence<String, Integer> presidents =
+				BiSequence.ofPairs("Abraham Lincoln", 1861, "Richard Nixon", 1969, "George Bush", 2001, "Barack Obama",
+				                   2005);
+
+		Sequence<String> joinedOffice = presidents.toSequence((n, y) -> n + " (" + y + ")");
+
+		assertThat(joinedOffice, contains("Abraham Lincoln (1861)", "Richard Nixon (1969)", "George Bush (2001)",
+		                                  "Barack Obama (2005)"));
 	}
 
 	@Test
@@ -200,33 +240,48 @@ public class SequenceDocumentationTest {
 
 	@SuppressWarnings("unchecked")
 	@Test
+	public void partition() {
+		Sequence<Sequence<Integer>> batched = Sequence.of(1, 2, 3, 4, 5, 6, 7, 8, 9).batch(3);
+
+		assertThat(batched, contains(contains(1, 2, 3), contains(4, 5, 6), contains(7, 8, 9)));
+	}
+
+	@SuppressWarnings("unchecked")
+	@Test
 	public void partitionConsonantsVowels() {
-		CharSeq word = CharSeq.from("terrain");
 		String vowels = "aeoiuy";
 
-		Sequence<String> consonantsVowels =
-				word.batch((a, b) -> (vowels.indexOf(a) == -1) != (vowels.indexOf(b) == -1)).map(CharSeq::asString);
+		Sequence<String> consonantsVowels = CharSeq.from("terrain")
+		                                           .batch((a, b) -> (vowels.indexOf(a) == -1) !=
+		                                                            (vowels.indexOf(b) == -1))
+		                                           .map(CharSeq::asString);
 
 		assertThat(consonantsVowels, contains("t", "e", "rr", "ai", "n"));
 	}
 
 	@Test
-	public void removeAll() {
-		List<Integer> list = new ArrayList<>(asList(1, 2, 3, 4, 5));
+	public void readReader() throws IOException {
+		Reader reader = new StringReader("hello world\n" + "goodbye world\n");
 
-		Sequence.from(list).filter(x -> x % 2 != 0).removeAll();
+		Sequence<String> titleCase = CharSeq.read(reader)
+		                                    .mapBack('\n',
+		                                             (p, n) -> p == '\n' || p == ' ' ? Character.toUpperCase(n) : n)
+		                                    .split('\n')
+		                                    .map(CharSeq::asString);
 
-		assertThat(list, contains(2, 4));
+		assertThat(titleCase, contains("Hello World", "Goodbye World"));
+
+		reader.close();
 	}
 
 	@Test
-	public void updatingCollection() {
-		List<Integer> list = new ArrayList<>(asList(1, 2, 3, 4, 5));
+	public void readInputStream() throws IOException {
+		InputStream inputStream = new ByteArrayInputStream(new byte[]{0xD, 0xE, 0xA, 0xD, 0xB, 0xE, 0xE, 0xF});
 
-		Sequence<Integer> sequence = Sequence.from(list);
+		String hexString = IntSequence.read(inputStream).toSequence(Integer::toHexString).join("");
 
-		list.add(6);
+		assertThat(hexString, is("deadbeef"));
 
-		assertThat(sequence, contains(1, 2, 3, 4, 5, 6));
+		inputStream.close();
 	}
 }

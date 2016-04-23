@@ -26,5 +26,5 @@ dependencies {
     testCompile "org.mockito:mockito-core:[2,)"
     testCompile 'junit:junit:[4.12,)'
     testCompile 'org.hamcrest:java-hamcrest:[2,)'
-    compile 'org.d2ab:sequence:1.0.1'
+    compile 'org.d2ab:sequence:1.1'
 }
