@@ -31,12 +31,15 @@ import static java.lang.Math.sqrt;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 public class SequenceDocumentationTest {
 	@Test
 	public void filterAndMap() {
-		List<String> evens =
-				Sequence.of(1, 2, 3, 4, 5, 6, 7, 8, 9).filter(x -> x % 2 == 0).map(Object::toString).toList();
+		List<String> evens = Sequence.of(1, 2, 3, 4, 5, 6, 7, 8, 9)
+		                             .filter(x -> x % 2 == 0)
+		                             .map(Object::toString)
+		                             .toList();
 
 		assertThat(evens, contains("2", "4", "6", "8"));
 	}
@@ -58,18 +61,18 @@ public class SequenceDocumentationTest {
 	public void sequenceInForeach() {
 		Sequence<Integer> sequence = Sequence.ints().limit(5);
 
-		int x = 1;
-		for (int i : sequence)
-			assertThat(i, is(x++));
+		int expected = 1;
+		for (int each : sequence)
+			assertThat(each, is(expected++));
 
-		assertThat(x, is(6));
+		assertThat(expected, is(6));
 	}
 
 	@Test
 	public void functionalInterface() {
 		List<Integer> list = Arrays.asList(1, 2, 3, 4, 5);
 
-		// Sequence as @FunctionalInterface of list's Iterator
+		// Sequence as @FunctionalInterface of list's iterator() method
 		Sequence<Integer> sequence = list::iterator;
 
 		// Operate on sequence as any other sequence using default methods
@@ -92,17 +95,17 @@ public class SequenceDocumentationTest {
 	public void caching() {
 		Iterator<Integer> iterator = Arrays.asList(1, 2, 3, 4, 5).iterator();
 
-		Sequence<Integer> sequence = Sequence.cache(iterator);
+		Sequence<Integer> cached = Sequence.cache(iterator);
 
-		assertThat(sequence, contains(1, 2, 3, 4, 5));
-		assertThat(sequence, contains(1, 2, 3, 4, 5));
+		assertThat(cached, contains(1, 2, 3, 4, 5));
+		assertThat(cached, contains(1, 2, 3, 4, 5));
 	}
 
 	@Test
-	public void removeAll() {
+	public void clear() {
 		List<Integer> list = new ArrayList<>(Arrays.asList(1, 2, 3, 4, 5));
 
-		Sequence.from(list).filter(x -> x % 2 != 0).removeAll();
+		Sequence.from(list).filter(x -> x % 2 != 0).clear();
 
 		assertThat(list, contains(2, 4));
 	}
@@ -138,13 +141,38 @@ public class SequenceDocumentationTest {
 	@SuppressWarnings("unchecked")
 	@Test
 	public void recurseThrowableCause() {
-		Exception e = new IllegalStateException(new IllegalArgumentException(new NullPointerException()));
+		Exception exception = new IllegalStateException(new IllegalArgumentException(new NullPointerException()));
 
-		Sequence<Throwable> sequence = Sequence.recurse(e, Throwable::getCause).untilNull();
+		Sequence<Throwable> exceptionAndCauses = Sequence.recurse(exception, Throwable::getCause).untilNull();
 
-		assertThat(sequence,
-		           contains(instanceOf(IllegalStateException.class), instanceOf(IllegalArgumentException.class),
-		                    instanceOf(NullPointerException.class)));
+		assertThat(exceptionAndCauses, contains(instanceOf(IllegalStateException.class),
+		                                        instanceOf(IllegalArgumentException.class),
+		                                        instanceOf(NullPointerException.class)));
+
+		exceptionAndCauses.last(IllegalArgumentException.class).ifPresent(Throwable::printStackTrace);
+	}
+
+	@Test
+	public void delimiterRecursion() {
+		Iterator<String> delimiter = Sequence.of("").append(Sequence.of(", ").repeat()).iterator();
+
+		StringBuilder joined = new StringBuilder();
+		for (String number : Arrays.asList("One", "Two", "Three"))
+			joined.append(delimiter.next()).append(number);
+
+		assertThat(joined.toString(), is("One, Two, Three"));
+	}
+
+	@Test
+	public void randomHash() {
+		CharSeq hexGenerator = CharSeq.random("0-9", "A-F").limit(8);
+
+		String hexNumber1 = hexGenerator.asString();
+		String hexNumber2 = hexGenerator.asString();
+
+		assertTrue(hexNumber1.matches("[0-9A-F]{8}"));
+		assertTrue(hexNumber2.matches("[0-9A-F]{8}"));
+		assertThat(hexNumber1, is(not(hexNumber2)));
 	}
 
 	@Test
@@ -161,8 +189,7 @@ public class SequenceDocumentationTest {
 		Sequence<Integer> keys = Sequence.of(1, 2, 3);
 		Sequence<String> values = Sequence.of("1", "2", "3");
 
-		Sequence<Pair<Integer, String>> keyValueSequence = keys.interleave(values);
-		Map<Integer, String> map = keyValueSequence.toMap();
+		Map<Integer, String> map = keys.interleave(values).toMap();
 
 		assertThat(map, is(equalTo(Maps.builder(1, "1").put(2, "2").put(3, "3").build())));
 	}
@@ -183,17 +210,17 @@ public class SequenceDocumentationTest {
 	public void entrySequence() {
 		Map<String, Integer> original = Maps.builder("1", 1).put("2", 2).put("3", 3).put("4", 4).build();
 
-		EntrySequence<Integer, String> oddsInverted =
-				EntrySequence.from(original).filter((k, v) -> v % 2 != 0).map((k, v) -> Maps.entry(v, k));
+		EntrySequence<Integer, String> oddsInverted = EntrySequence.from(original)
+		                                                           .filter((k, v) -> v % 2 != 0)
+		                                                           .map((k, v) -> Maps.entry(v, k));
 
 		assertThat(oddsInverted.toMap(), is(equalTo(Maps.builder(1, "1").put(3, "3").build())));
 	}
 
 	@Test
 	public void biSequence() {
-		BiSequence<String, Integer> presidents =
-				BiSequence.ofPairs("Abraham Lincoln", 1861, "Richard Nixon", 1969, "George Bush", 2001, "Barack Obama",
-				                   2005);
+		BiSequence<String, Integer> presidents = BiSequence.ofPairs("Abraham Lincoln", 1861, "Richard Nixon", 1969,
+		                                                            "George Bush", 2001, "Barack Obama", 2005);
 
 		Sequence<String> joinedOffice = presidents.toSequence((n, y) -> n + " (" + y + ")");
 
@@ -261,26 +288,43 @@ public class SequenceDocumentationTest {
 
 	@Test
 	public void readReader() throws IOException {
-		Reader reader = new StringReader("hello world\n" + "goodbye world\n");
+		Reader reader = new StringReader("hello world\ngoodbye world\n");
 
 		Sequence<String> titleCase = CharSeq.read(reader)
-		                                    .mapBack('\n',
-		                                             (p, n) -> p == '\n' || p == ' ' ? Character.toUpperCase(n) : n)
+		                                    .mapBack('\n', (p, n) -> p == '\n' || p == ' ' ?
+		                                                             Character.toUpperCase(n) : n)
 		                                    .split('\n')
+		                                    .map(phrase -> phrase.append('!'))
 		                                    .map(CharSeq::asString);
 
-		assertThat(titleCase, contains("Hello World", "Goodbye World"));
+		assertThat(titleCase, contains("Hello World!", "Goodbye World!"));
 
 		reader.close();
+	}
+
+	@Test
+	public void filterReader() throws IOException {
+		Reader original = new StringReader("hello world\ngoodbye world\n");
+
+		BufferedReader transformed = new BufferedReader(CharSeq.read(original).map(Character::toUpperCase).asReader());
+
+		assertThat(transformed.readLine(), is("HELLO WORLD"));
+		assertThat(transformed.readLine(), is("GOODBYE WORLD"));
+
+		transformed.close();
+		original.close();
 	}
 
 	@Test
 	public void readInputStream() throws IOException {
 		InputStream inputStream = new ByteArrayInputStream(new byte[]{0xD, 0xE, 0xA, 0xD, 0xB, 0xE, 0xE, 0xF});
 
-		String hexString = IntSequence.read(inputStream).toSequence(Integer::toHexString).join("");
+		String hexString = IntSequence.read(inputStream)
+		                              .toSequence(Integer::toHexString)
+		                              .map(String::toUpperCase)
+		                              .join();
 
-		assertThat(hexString, is("deadbeef"));
+		assertThat(hexString, is("DEADBEEF"));
 
 		inputStream.close();
 	}
