@@ -28,10 +28,10 @@ import java.util.stream.Stream;
 
 import static java.lang.Character.toUpperCase;
 import static java.lang.Math.sqrt;
-import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class SequenceDocumentationTest {
 	@Test
@@ -114,11 +114,19 @@ public class SequenceDocumentationTest {
 	public void updatingCollection() {
 		List<Integer> list = new ArrayList<>(Arrays.asList(1, 2, 3, 4, 5));
 
-		Sequence<Integer> sequence = Sequence.from(list).filter(x -> x % 2 == 0);
-		assertThat(sequence, contains(2, 4));
+		Sequence<String> evensAsStrings = Sequence.from(list)
+		                                          .filter(x -> x % 2 == 0)
+		                                          .biMap(Object::toString, Integer::parseInt); // biMap allows add
+		assertThat(evensAsStrings, contains("2", "4"));
 
-		list.add(6);
-		assertThat(sequence, contains(2, 4, 6));
+		evensAsStrings.add("6");
+		assertThat(evensAsStrings, contains("2", "4", "6"));
+		assertThat(list, contains(1, 2, 3, 4, 5, 6));
+
+		expecting(IllegalArgumentException.class,
+		          () -> evensAsStrings.add("7")); // cannot add filtered out item to sequence
+		assertThat(evensAsStrings, contains("2", "4", "6"));
+		assertThat(list, contains(1, 2, 3, 4, 5, 6));
 	}
 
 	@SuppressWarnings("SpellCheckingInspection")
@@ -294,7 +302,7 @@ public class SequenceDocumentationTest {
 
 		Sequence<String> titleCase = CharSeq.read(reader)
 		                                    .mapBack('\n', (p, n) -> p == '\n' || p == ' ' ?
-		                                                             Character.toUpperCase(n) : n)
+		                                                             toUpperCase(n) : n)
 		                                    .split('\n')
 		                                    .map(phrase -> phrase.append('!'))
 		                                    .map(CharSeq::asString);
@@ -329,5 +337,20 @@ public class SequenceDocumentationTest {
 		assertThat(hexString, is("DEADBEEF"));
 
 		inputStream.close();
+	}
+
+	@FunctionalInterface
+	private interface ThrowingRunnable {
+		void run() throws Exception;
+	}
+
+	private static void expecting(Class<? extends Exception> exceptionClass, ThrowingRunnable action) {
+		try {
+			action.run();
+			fail("Expected " + exceptionClass.getName());
+		} catch (Exception t) {
+			if (!exceptionClass.isInstance(t))
+				throw new AssertionError("Expected " + exceptionClass.getName() + " but got: " + t, t);
+		}
 	}
 }
